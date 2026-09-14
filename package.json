@@ -35,7 +35,7 @@
     "react-native-purchases": "^8.0.0",
     "react-native-reanimated": "4.2.1",
     "react-native-safe-area-context": "^5.7.0",
-    "react-native-screens": "4.4.0",
+    "react-native-screens": "4.23.0",
     "react-native-url-polyfill": "^2.0.0",
     "uniwind": "^1.6.1",
     "zustand": "^5.0.3",
