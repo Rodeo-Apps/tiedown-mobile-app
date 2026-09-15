@@ -10,3 +10,7 @@ ios/
 android/
 expo-env.d.ts
 uniwind-types.d.ts
+
+# iOS build credentials (never commit)
+creds/
+credentials.json
