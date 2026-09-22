@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import { Session, User } from '@supabase/supabase-js';
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { identifyUser, syncEntitlements } from '@/services/iapService';
 
 export type Profile = {
   id: string;
@@ -9,6 +10,7 @@ export type Profile = {
   avatar_url: string | null;
   has_premium_access: boolean;
   premium_source: string | null;
+  premium_expires_at: string | null;
   is_coach: boolean;
   school_id: string | null;
 };
@@ -35,10 +37,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchProfile = useCallback(async (userId: string) => {
     const { data } = await supabase
       .from('profiles')
-      .select('id, full_name, avatar_url, has_premium_access, premium_source, is_coach, school_id')
+      .select(
+        'id, full_name, avatar_url, has_premium_access, premium_source, premium_expires_at, is_coach, school_id',
+      )
       .eq('id', userId)
       .single();
-    if (data) setProfile(data as Profile);
+    if (!data) return;
+
+    const profileData = data as Profile;
+    setProfile(profileData);
+
+    // Reconcile the cached premium flag with the LIVE RevenueCat entitlement.
+    // The DB value alone is untrustworthy: it's set true on purchase but a
+    // subscription can lapse / cancel / refund while the app is closed. This
+    // runs on every launch and self-heals if a webhook was ever missed.
+    identifyUser(userId);
+    const live = await syncEntitlements();
+    if (live) {
+      // Belt-and-braces expiry check in case the entitlement is reported active
+      // but its expiration has already passed.
+      const expired =
+        live.expiresAt !== null && new Date(live.expiresAt).getTime() <= Date.now();
+      const reconciled = live.isPremium && !expired;
+      if (
+        reconciled !== profileData.has_premium_access ||
+        (live.expiresAt ?? null) !== (profileData.premium_expires_at ?? null)
+      ) {
+        setProfile({
+          ...profileData,
+          has_premium_access: reconciled,
+          premium_expires_at: live.expiresAt,
+        });
+      }
+    }
   }, []);
 
   useEffect(() => {
